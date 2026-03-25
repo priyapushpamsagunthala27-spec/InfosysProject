@@ -1,0 +1,82 @@
+import cv2
+import numpy as np
+import csv
+import time
+import random
+FRAME_WIDTH = 900
+FRAME_HEIGHT = 600
+LINE_POSITION = FRAME_WIDTH // 2  
+zone_counts = {
+    "Zone 1": {"entry": 0, "exit": 0},
+    "Zone 2": {"entry": 0, "exit": 0}
+}
+total_people = 0
+counted_ids = set()
+next_person_id = 0
+persons = {}
+with open("count_data.csv", "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(["Zone", "Entry", "Exit", "Time"])
+class Person:
+    def __init__(self, x, y):
+        global next_person_id
+        self.id = next_person_id
+        next_person_id += 1
+        self.x = x
+        self.y = y
+        self.prev_x = x
+        self.direction = random.choice(["right", "left"])
+        self.counted = False
+    def move(self):
+        self.prev_x = self.x
+
+        if self.direction == "right":
+            self.x += random.randint(3, 8)
+        else:
+            self.x -= random.randint(3, 8)
+for i in range(10):
+    x = random.randint(50, FRAME_WIDTH - 50)
+    y = random.randint(100, FRAME_HEIGHT - 100)
+    persons[i] = Person(x, y)
+while True:
+    frame = np.zeros((FRAME_HEIGHT, FRAME_WIDTH, 3), dtype=np.uint8)
+    frame[:] = (40, 40, 40)
+    cv2.rectangle(frame, (0, 0), (LINE_POSITION, FRAME_HEIGHT), (50, 100, 200), -1)
+    cv2.rectangle(frame, (LINE_POSITION, 0), (FRAME_WIDTH, FRAME_HEIGHT), (200, 100, 50), -1)
+    cv2.line(frame, (LINE_POSITION, 0), (LINE_POSITION, FRAME_HEIGHT), (0, 255, 255), 3)
+    for person in persons.values():
+        person.move()
+        cv2.circle(frame, (person.x, person.y), 12, (0, 255, 0), -1)
+        cv2.putText(frame, f"ID:{person.id}", (person.x-20, person.y-20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
+        if person.prev_x < LINE_POSITION and person.x >= LINE_POSITION:
+            if person.id not in counted_ids:
+                zone_counts["Zone 2"]["entry"] += 1
+                counted_ids.add(person.id)
+                total_people += 1
+        if person.prev_x > LINE_POSITION and person.x <= LINE_POSITION:
+            if person.id not in counted_ids:
+                zone_counts["Zone 1"]["exit"] += 1
+                counted_ids.add(person.id)
+    cv2.rectangle(frame, (0, 0), (FRAME_WIDTH, 70), (0, 0, 0), -1)
+    cv2.putText(frame, f"Total People: {total_people}", (20, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2)
+    cv2.putText(frame, f"Zone1 Exit: {zone_counts['Zone 1']['exit']}", (300, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2)
+    cv2.putText(frame, f"Zone2 Entry: {zone_counts['Zone 2']['entry']}", (600, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
+    if int(time.time()) % 5 == 0:
+        with open("count_data.csv", "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Zone 1",
+                             zone_counts["Zone 1"]["entry"],
+                             zone_counts["Zone 1"]["exit"],
+                             time.ctime()])
+            writer.writerow(["Zone 2",
+                             zone_counts["Zone 2"]["entry"],
+                             zone_counts["Zone 2"]["exit"],
+                             time.ctime()])
+    cv2.imshow("Crowd Tracking System", frame)
+    if cv2.waitKey(50) & 0xFF == 27:
+        break
+cv2.destroyAllWindows()
