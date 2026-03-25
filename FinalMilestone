@@ -1,0 +1,195 @@
+import cv2
+import numpy as np
+import random
+import csv
+import os
+import logging
+from datetime import datetime
+import pandas as pd
+import matplotlib.pyplot as plt
+logging.basicConfig(filename="system_log.txt",
+                    level=logging.INFO,
+                    format="%(asctime)s - %(message)s")
+logging.info("Simulation Started")
+MAX_LIMIT = 10
+DATA_FILE = "crowd_data.csv"
+if not os.path.exists(DATA_FILE):
+    with open(DATA_FILE,'w',newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["Time","Zone","Entry","Exit","Total","Zone1","Zone2"])
+people = []
+initial_people = 4
+for i in range(initial_people):
+    x = random.randint(50,350)
+    y = random.randint(50,450)
+    dx = random.choice([-2,-1,1,2])
+    dy = random.choice([-2,-1,1,2])
+    people.append([x,y,dx,dy])
+entry_count = 0
+exit_count = 0
+prev_positions = []
+frame_count = 0
+alert_triggered = False
+print("Press Q to stop simulation")
+while True:
+    frame = np.zeros((500,800,3),dtype=np.uint8)
+    zone1_count = 0
+    zone2_count = 0
+    current_positions = []
+    frame_count += 1
+    if frame_count % 100 == 0 and len(people) < 20:
+        for i in range(3):
+            x = random.randint(450,750)
+            y = random.randint(50,450)
+            dx = random.choice([-2,-1,1,2])
+            dy = random.choice([-2,-1,1,2])
+            people.append([x,y,dx,dy])
+        logging.info("Crowd increased in Zone 2")
+    cv2.rectangle(frame,(0,0),(400,500),(255,0,0),-1)
+    cv2.rectangle(frame,(400,0),(800,500),(0,165,255),-1)
+    cv2.line(frame,(400,0),(400,500),(0,255,255),3)
+    cv2.putText(frame,"ZONE 1",(150,30),
+                cv2.FONT_HERSHEY_SIMPLEX,0.8,(255,255,255),2)
+    cv2.putText(frame,"ZONE 2",(550,30),
+                cv2.FONT_HERSHEY_SIMPLEX,0.8,(255,255,255),2)
+    for person in people:
+        person[0] += person[2]
+        person[1] += person[3]
+        if person[0] < 20 or person[0] > 780:
+            person[2] *= -1
+        if person[1] < 20 or person[1] > 480:
+            person[3] *= -1
+        x = person[0]
+        y = person[1]
+        current_positions.append((x,y))
+        cv2.circle(frame,(x,y),10,(0,255,0),-1)
+        if x < 400:
+            zone1_count += 1
+        else:
+            zone2_count += 1
+    total_people = zone1_count + zone2_count
+    for pos in current_positions:
+        if pos not in prev_positions:
+            if pos[0] < 400:
+                entry_count += 1
+            else:
+                exit_count += 1
+    prev_positions = current_positions
+    cv2.putText(frame,f"Total People: {total_people}",
+                (10,40),cv2.FONT_HERSHEY_SIMPLEX,0.7,(255,255,255),2)
+    cv2.putText(frame,f"Zone1 Count: {zone1_count}",
+                (10,80),cv2.FONT_HERSHEY_SIMPLEX,0.6,(255,255,0),2)
+    cv2.putText(frame,f"Zone2 Count: {zone2_count}",
+                (10,110),cv2.FONT_HERSHEY_SIMPLEX,0.6,(255,255,0),2)
+    cv2.putText(frame,f"Entry Count: {entry_count}",
+                (10,140),cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,255,0),2)
+    cv2.putText(frame,f"Exit Count: {exit_count}",
+                (10,170),cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,0,255),2)
+    if total_people > MAX_LIMIT:
+        cv2.putText(frame,"ALERT: OVERCROWDING!",
+                    (180,250),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (0,0,255),
+                    3)
+        if not alert_triggered:
+            logging.warning("Overcrowding Alert Triggered")
+            filename = f"alert_{datetime.now().strftime('%H%M%S')}.jpg"
+            cv2.imwrite(filename,frame)
+            alert_triggered = True
+    with open(DATA_FILE,'a',newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            datetime.now().strftime("%H:%M:%S"),
+            "Zone Monitoring",
+            entry_count,
+            exit_count,
+            total_people,
+            zone1_count,
+            zone2_count
+        ])
+    cv2.imshow("Crowd Monitoring System",frame)
+    if cv2.waitKey(80) & 0xFF == ord('q'):
+        break
+cv2.destroyAllWindows()
+logging.info("System Shutdown")
+data = pd.read_csv(DATA_FILE)
+total_visitors = data["Entry"].max()
+peak_time = data.loc[data["Total"].idxmax(),"Time"]
+max_people = data["Total"].max()
+zone1_peak = data["Zone1"].max()
+zone2_peak = data["Zone2"].max()
+zone1_avg = data["Zone1"].mean()
+zone2_avg = data["Zone2"].mean()
+if zone1_avg > zone2_avg:
+    busiest_zone = "Zone 1"
+else:
+    busiest_zone = "Zone 2"
+print("\n------ Crowd Analysis Report ------")
+print("Total Visitors:",total_visitors)
+print("Peak Crowd Time:",peak_time)
+print("Maximum Crowd:",max_people)
+print("Maximum Zone1 Crowd:",zone1_peak)
+print("Maximum Zone2 Crowd:",zone2_peak)
+print("Average Zone1 Crowd:",round(zone1_avg,2))
+print("Average Zone2 Crowd:",round(zone2_avg,2))
+print("Most Used Zone:",busiest_zone)
+plt.figure(figsize=(10,5))
+plt.plot(data["Total"], marker='o', label="Total Crowd")
+plt.plot(data["Zone1"], label="Zone 1 Crowd")
+plt.plot(data["Zone2"], label="Zone 2 Crowd")
+plt.title("Crowd Trend Over Time")
+plt.xlabel("Time Index")
+plt.ylabel("Number of People")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+
+Dashboard:
+from flask import Flask, render_template, send_from_directory
+import pandas as pd
+import os
+
+app = Flask(__name__, template_folder="dashboard")
+
+DATA_FILE = "crowd_data.csv"
+LOG_FILE = "system_log.txt"
+
+@app.route("/")
+def home():
+    data = pd.read_csv(DATA_FILE)
+    total = data["Total"].tolist()
+    zone1 = data["Zone1"].tolist()
+    zone2 = data["Zone2"].tolist()
+    time = data["Time"].tolist()
+
+    with open(LOG_FILE) as f:
+        logs = f.read()
+
+    screenshots = []
+    for file in os.listdir():
+        if file.startswith("alert_") and file.endswith(".jpg"):
+            screenshots.append(file)
+
+    return render_template(
+        "index.html",
+        total=total,
+        zone1=zone1,
+        zone2=zone2,
+        time=time,
+        logs=logs,
+        screenshots=screenshots
+    )
+
+@app.route('/image/<filename>')
+def image(filename):
+    return send_from_directory('.', filename)
+
+@app.route('/file/<filename>')
+def file(filename):
+    return send_from_directory('.', filename)
+
+if __name__ == "__main__":
+    app.run(debug=True)
