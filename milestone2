@@ -1,0 +1,117 @@
+import cv2
+import json
+import time
+from datetime import datetime
+ZONE_FILE = "zones.json"
+LOG_FILE = "zone_report.log"
+zones = []
+drawing = False
+start_point = None
+fullscreen = False
+def load_zones():
+    global zones
+    try:
+        with open(ZONE_FILE, "r") as f:
+            zones = json.load(f)
+    except:
+        zones = []
+def save_zones():
+    with open(ZONE_FILE, "w") as f:
+        json.dump(zones, f, indent=4)
+def log_zone(zone):
+    log_msg = (
+        f"[{zone['created_time']}] "
+        f"{zone['name']} created | "
+        f"Start: {zone['start']} End: {zone['end']}\n"
+    )
+    print(log_msg.strip())
+    with open(LOG_FILE, "a") as f:
+        f.write(log_msg)
+def draw_zone(event, x, y, flags, param):
+    global drawing, start_point
+    if event == cv2.EVENT_LBUTTONDOWN:
+        drawing = True
+        start_point = (x, y)
+    elif event == cv2.EVENT_LBUTTONUP:
+        drawing = False
+        end_point = (x, y)
+        zone = {
+            "name": f"Zone {len(zones)+1}",
+            "start": start_point,
+            "end": end_point,
+            "created_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        zones.append(zone)
+        save_zones()
+        log_zone(zone)   
+cap = cv2.VideoCapture(0)
+if not cap.isOpened():
+    print("Camera failed to open")
+    exit()
+load_zones()
+cv2.namedWindow("Zone Tool", cv2.WINDOW_NORMAL)
+cv2.setMouseCallback("Zone Tool", draw_zone)
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        cv2.putText(frame, "Camera Error", (50, 50),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        cv2.imshow("Zone Tool", frame)
+        cv2.waitKey(1)
+        continue
+    for zone in zones:
+        x1, y1 = zone["start"]
+        x2, y2 = zone["end"]
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(frame, zone["name"], (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        cv2.putText(frame, "Count: 0", (x1 + 5, y1 + 25),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+    instructions = [
+        "Mouse: Draw Zone",
+        "d: Delete last zone",
+        "r: Reset zones",
+        "p: Save screenshot",
+        "f: Fullscreen",
+        "q: Quit"
+    ]
+
+    for i, text in enumerate(instructions):
+        cv2.putText(frame, text, (10, 30 + i * 25),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    cv2.imshow("Zone Tool", frame)
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord('q'):
+        break
+    elif key == ord('d') and zones:
+        zones.pop()
+        save_zones()
+    elif key == ord('r'):
+        zones.clear()
+        save_zones()
+    elif key == ord('p'):
+        filename = f"screenshot_{int(time.time())}.png"
+        cv2.imwrite(filename, frame)
+        print(f"📸 Saved {filename}")
+    elif key == ord('f'):
+        fullscreen = not fullscreen
+        cv2.setWindowProperty(
+            "Zone Tool",
+            cv2.WND_PROP_FULLSCREEN,
+            cv2.WINDOW_FULLSCREEN if fullscreen else cv2.WINDOW_NORMAL
+        )
+
+cap.release()
+cv2.destroyAllWindows()
+
+# Load saved zones automatically
+# Display zone names on screen
+# Add delete zone feature
+# Add reset zones feature
+# Show zone count placeholder
+# Save zone screenshot
+# Handle camera errors
+# Add instruction overlay
+# Add fullscreen toggle
+# Log zone creation time
+
