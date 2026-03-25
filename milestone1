@@ -1,0 +1,101 @@
+import cv2
+import json
+import random
+zones = []
+drawing = False
+start_point = (-1, -1)
+current_frame = None
+ZONE_FILE = "zones.json"
+zone_colors = []   
+def draw_rectangle(event, x, y, flags, param):
+    global drawing, start_point, current_frame, zones, zone_colors
+    if event == cv2.EVENT_LBUTTONDOWN:
+        drawing = True
+        start_point = (x, y)
+    elif event == cv2.EVENT_MOUSEMOVE and drawing:
+        frame_copy = current_frame.copy()
+        cv2.rectangle(frame_copy, start_point, (x, y), (0, 255, 0), 2)
+        show_zones(frame_copy)
+        cv2.imshow("Video", frame_copy)
+    elif event == cv2.EVENT_LBUTTONUP:
+        drawing = False
+        end_point = (x, y)
+        zones.append([start_point, end_point])
+        color = (
+            random.randint(50, 255),
+            random.randint(50, 255),
+            random.randint(50, 255)
+        )
+        zone_colors.append(color)
+        print(f"Zone {len(zones)} added: {start_point} to {end_point}")
+def show_zones(frame):
+    for i, zone in enumerate(zones):
+        color = zone_colors[i]
+        cv2.rectangle(frame, zone[0], zone[1], color, 2)
+        label = f"Zone {i+1}"
+        cv2.putText(
+            frame,
+            label,
+            (zone[0][0], zone[0][1] - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            color,
+            2
+        )
+def save_zones():
+    data = {
+        "zones": zones,
+        "colors": zone_colors
+    }
+    with open(ZONE_FILE, "w") as f:
+        json.dump(data, f)
+    print("Zones saved to file.")
+def load_zones():
+    global zones, zone_colors
+    try:
+        with open(ZONE_FILE, "r") as f:
+            data = json.load(f)
+        zones = [(tuple(z[0]), tuple(z[1])) for z in data["zones"]]
+        zone_colors = [tuple(c) for c in data["colors"]]
+        print("Zones loaded from file.")
+    except:
+        print("No saved zones found.")
+cap = cv2.VideoCapture(0)
+cv2.namedWindow("Video")
+cv2.setMouseCallback("Video", draw_rectangle)
+load_zones()
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+    current_frame = frame.copy()
+    show_zones(frame)
+    cv2.imshow("Video", frame)
+    key = cv2.waitKey(1)
+    if key == ord('s'):
+        save_zones()
+    elif key == ord('d'):
+        if zones:
+            zones.pop()
+            zone_colors.pop()
+            print("Last zone deleted")
+    elif key == ord('c'):
+        zones.clear()
+        zone_colors.clear()
+        print("All zones cleared")
+    elif key == ord('q'):
+        save_zones()   
+        break
+
+cap.release()
+cv2.destroyAllWindows()
+#Task: Open webcam and show live video.
+#Draw Zones on Video
+#Save Zones
+#Load Zones
+#Label Zones 
+#Delete a Zone
+#Clear All Zones 
+#Save Zones Automatically 
+#Support Multiple Zones
+#Change Zone Colors
